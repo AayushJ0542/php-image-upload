@@ -113,7 +113,122 @@ form {
 .field-group input::placeholder,
 .field-group textarea::placeholder { color: #9ca3af; }
 
-/* ---- Upload button ---- */
+/* ---- Connection strip ---- */
+.connect-strip {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+/* hidden utility for strip children */
+.connect-generate[hidden],
+.connect-qr-side[hidden],
+.connect-badge-row[hidden] { display: none; }
+
+/* Step 1: generate QR */
+.connect-generate {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.connect-generate svg {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.generate-qr-btn {
+  margin-left: auto;
+  padding: 8px 18px;
+  background: #1a1a2e;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.generate-qr-btn:hover { background: #2d2d4e; }
+
+/* Step 2: QR visible */
+.connect-qr-side {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.connect-qr-side img {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.connect-qr-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.connect-qr-text strong {
+  font-size: 0.9rem;
+  color: #1a1a2e;
+}
+
+.connect-qr-text span {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+/* Step 3: connected */
+.connect-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.connect-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #065f46;
+}
+
+/* End session button */
+.end-session-btn {
+  padding: 7px 16px;
+  background: #fff;
+  color: #dc2626;
+  border: 1.5px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.end-session-btn:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+/* ---- Upload row ---- */
+.upload-row {
+  flex-direction: column;
+  gap: 12px;
+}
+
 .upload-image-btn {
   display: inline-flex;
   align-items: center;
@@ -126,18 +241,27 @@ form {
   font-size: 0.93rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
+  transition: background 0.2s, transform 0.1s, opacity 0.2s;
+  align-self: flex-start;
 }
 
-.upload-image-btn:hover  { background: #2d2d4e; }
-.upload-image-btn:active { transform: scale(0.97); }
+.upload-image-btn:hover:not(:disabled)  { background: #2d2d4e; }
+.upload-image-btn:active:not(:disabled) { transform: scale(0.97); }
+.upload-image-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.upload-hint {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
 
 /* ---- Thumbnail after photo attached ---- */
 .thumb-preview {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 12px;
   padding: 10px 14px;
   background: #f0fdf4;
   border: 1.5px solid #bbf7d0;
@@ -249,7 +373,7 @@ form {
 
 .modal-close:hover { color: #1a1a2e; }
 
-/* ---- Modal QR side ---- */
+/* ---- Modal left (request status) ---- */
 .modal-qr {
   background: #f9fafb;
   border-right: 1px solid #e5e7eb;
@@ -267,22 +391,21 @@ form {
   text-align: center;
 }
 
-.modal-qr img {
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
+.request-anim {
+  animation: float 2s ease-in-out infinite;
 }
 
-.session-badge {
-  font-size: 0.67rem;
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+.modal-hint {
+  font-size: 0.78rem;
   color: #9ca3af;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-family: monospace;
-  word-break: break-all;
   text-align: center;
-  max-width: 240px;
+  max-width: 200px;
+  line-height: 1.5;
 }
 
 .status-row {
@@ -310,7 +433,7 @@ form {
   50%       { opacity: 0.3; }
 }
 
-/* ---- Modal image side ---- */
+/* ---- Modal right (photo preview) ---- */
 .modal-image {
   padding: 40px 32px 36px;
   display: flex;
@@ -405,9 +528,11 @@ form {
   body { padding: 20px 12px 40px; }
 
   .form-header { padding: 20px; }
-  form { padding: 20px; }
+  form { padding: 20px; gap: 16px; }
 
   .form-row.two-col { flex-direction: column; gap: 16px; }
+
+  .connect-qr-side img { width: 72px; height: 72px; }
 
   .modal {
     grid-template-columns: 1fr;

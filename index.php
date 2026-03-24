@@ -10,7 +10,11 @@ $protocol  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https
 $host      = $_SERVER['HTTP_HOST'];
 $basePath  = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 $mobileUrl = $protocol . '://' . $host . $basePath . '/mobile.php?session=' . urlencode($sessionId);
-$qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . urlencode($mobileUrl);
+$qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . urlencode($mobileUrl);
+
+// Initialise session JSON file early
+require_once __DIR__ . '/session-helper.php';
+initSession($sessionId);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -96,9 +100,57 @@ $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . 
         </div>
       </div>
 
-      <!-- Upload Image button -->
-      <div class="form-row">
-        <button type="button" class="upload-image-btn" id="open-modal">
+      <!-- Phone connection strip -->
+      <div class="connect-strip" id="connect-strip">
+
+        <!-- Step 1: not yet generated -->
+        <div class="connect-generate" id="qr-generate">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none"
+               viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <path stroke-linecap="round" d="M14 14h2m3 0h2M14 17v2m0 3v-1M17 14v3h3"/>
+          </svg>
+          <div class="connect-qr-text">
+            <strong>Connect your phone</strong>
+            <span>Generate a QR code to link your phone camera</span>
+          </div>
+          <button type="button" class="generate-qr-btn" id="generate-qr-btn">
+            Generate QR Code
+          </button>
+        </div>
+
+        <!-- Step 2: QR visible, waiting for scan -->
+        <div class="connect-qr-side" id="qr-side" hidden>
+          <img id="qr-img" src="<?= htmlspecialchars($qrApiUrl) ?>" alt="QR Code" width="100" height="100">
+          <div class="connect-qr-text">
+            <strong>Scan once to connect your phone</strong>
+            <span>No re-scanning needed for future uploads</span>
+          </div>
+          <button type="button" class="end-session-btn" id="end-session-btn-qr" title="End session and regenerate QR">
+            End Session
+          </button>
+        </div>
+
+        <!-- Step 3: phone connected -->
+        <div class="connect-badge-row" id="connect-badge-row" hidden>
+          <div class="connect-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none"
+                 viewBox="0 0 24 24" stroke="#10b981" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+            Phone connected
+          </div>
+          <button type="button" class="end-session-btn" id="end-session-btn-connected">
+            End Session
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Upload button row -->
+      <div class="form-row upload-row">
+        <button type="button" class="upload-image-btn" id="open-modal" disabled>
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none"
                viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
@@ -107,8 +159,9 @@ $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . 
           </svg>
           Upload Image via Phone
         </button>
+        <span class="upload-hint" id="upload-hint">Connect your phone first</span>
 
-        <!-- Thumbnail shown after photo received -->
+        <!-- Thumbnail after photo attached -->
         <div class="thumb-preview" id="thumb-preview" hidden>
           <img id="thumb-img" src="" alt="Jewelry photo">
           <div class="thumb-info">
@@ -133,20 +186,27 @@ $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . 
 
 </div>
 
-<!-- QR / Photo popup -->
+<!-- QR / Photo popup modal -->
 <div class="modal-overlay" id="modal-overlay" hidden>
   <div class="modal">
     <button class="modal-close" id="modal-close" title="Close">&times;</button>
 
-    <!-- Left: QR code -->
+    <!-- Left: status / instruction -->
     <div class="modal-qr">
-      <h2>Scan with your phone</h2>
-      <img src="<?= htmlspecialchars($qrApiUrl) ?>" alt="QR Code" width="220" height="220">
-      <div class="session-badge">Session: <?= htmlspecialchars($sessionId) ?></div>
+      <h2>Photo request sent</h2>
+      <div class="request-anim" id="request-anim">
+        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" fill="none"
+             viewBox="0 0 24 24" stroke="#6366f1" stroke-width="1.4">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 7h2l2-3h10l2 3h2a1 1 0 011 1v11a1 1 0 01-1 1H3a1 1 0 01-1-1V8a1 1 0 011-1z"/>
+          <circle cx="12" cy="13" r="3.5" stroke-linecap="round"/>
+        </svg>
+      </div>
       <div class="status-row">
         <span class="dot" id="status-dot"></span>
-        <span id="status-text">Waiting for photo&hellip;</span>
+        <span id="status-text">Waiting for phone to capture…</span>
       </div>
+      <p class="modal-hint">Your phone will vibrate / show a prompt automatically.</p>
     </div>
 
     <!-- Right: photo preview -->
@@ -166,7 +226,8 @@ $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . 
         <a id="download-btn" class="download-btn" href="#" download>
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none"
                viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
           Download
         </a>
@@ -184,103 +245,197 @@ $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . 
 </div>
 
 <script>
-  const SESSION  = <?= json_encode($sessionId) ?>;
+  let SESSION  = <?= json_encode($sessionId) ?>;
   const INTERVAL = 2000;
 
-  const overlay        = document.getElementById('modal-overlay');
-  const openBtn        = document.getElementById('open-modal');
-  const closeBtn       = document.getElementById('modal-close');
-  const dot            = document.getElementById('status-dot');
-  const statusText     = document.getElementById('status-text');
-  const placeholder    = document.getElementById('image-placeholder');
-  const imgEl          = document.getElementById('jewelry-image');
-  const imgActions     = document.getElementById('modal-image-actions');
-  const dlBtn          = document.getElementById('download-btn');
-  const usePhotoBtn    = document.getElementById('use-photo-btn');
-  const thumbPreview   = document.getElementById('thumb-preview');
-  const thumbImg       = document.getElementById('thumb-img');
-  const retakeBtn      = document.getElementById('retake-btn');
+  // --- DOM refs ---
+  const overlay            = document.getElementById('modal-overlay');
+  const openBtn            = document.getElementById('open-modal');
+  const closeBtn           = document.getElementById('modal-close');
+  const dot                = document.getElementById('status-dot');
+  const statusText         = document.getElementById('status-text');
+  const placeholder        = document.getElementById('image-placeholder');
+  const imgEl              = document.getElementById('jewelry-image');
+  const imgActions         = document.getElementById('modal-image-actions');
+  const dlBtn              = document.getElementById('download-btn');
+  const usePhotoBtn        = document.getElementById('use-photo-btn');
+  const thumbPreview       = document.getElementById('thumb-preview');
+  const thumbImg           = document.getElementById('thumb-img');
+  const retakeBtn          = document.getElementById('retake-btn');
+  const qrGenerate         = document.getElementById('qr-generate');
+  const qrSide             = document.getElementById('qr-side');
+  const qrImg              = document.getElementById('qr-img');
+  const connectBadgeRow    = document.getElementById('connect-badge-row');
+  const generateQrBtn      = document.getElementById('generate-qr-btn');
+  const endSessionBtnQr    = document.getElementById('end-session-btn-qr');
+  const endSessionBtnConn  = document.getElementById('end-session-btn-connected');
+  const uploadHint         = document.getElementById('upload-hint');
 
-  let timer        = null;
-  let receivedUrl  = null;
+  let connectionTimer = null;
+  let photoTimer      = null;
+  let currentReqId    = 0;
+  let receivedUrl     = null;
 
-  function startPolling() {
-    poll();
-    timer = setInterval(poll, INTERVAL);
+  // ── Generate QR on button click ─────────────────────────────────────────
+  generateQrBtn.addEventListener('click', () => {
+    qrGenerate.hidden = true;
+    qrSide.hidden     = false;
+    startConnectionPolling();
+  });
+
+  // ── End Session ──────────────────────────────────────────────────────────
+  function doEndSession() {
+    stopConnectionPolling();
+    stopPhotoPolling();
+    closeModal();
+
+    fetch('end-session.php', { method: 'POST' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        SESSION = data.session_id;
+        qrImg.src = data.qr_url;
+
+        // Reset UI back to "generate QR" state
+        qrGenerate.hidden      = false;
+        qrSide.hidden          = true;
+        connectBadgeRow.hidden = true;
+        openBtn.disabled       = true;
+        uploadHint.textContent = 'Connect your phone first';
+        thumbPreview.hidden    = true;
+        receivedUrl            = null;
+        currentReqId           = 0;
+      })
+      .catch(() => alert('Could not end session. Please refresh the page.'));
   }
 
-  function stopPolling() {
-    if (timer) { clearInterval(timer); timer = null; }
+  endSessionBtnQr.addEventListener('click', doEndSession);
+  endSessionBtnConn.addEventListener('click', doEndSession);
+
+  // ── Connection polling ──────────────────────────────────────────────────
+  function startConnectionPolling() {
+    pollConnection();
+    connectionTimer = setInterval(pollConnection, INTERVAL);
   }
 
-  function showReady(url) {
-    receivedUrl = url;
-    dot.className          = 'dot ready';
-    statusText.textContent = 'Photo received!';
-    imgEl.src              = url;
-    imgEl.style.display    = 'block';
-    placeholder.style.display = 'none';
-    dlBtn.href             = url;
-    imgActions.hidden      = false;
-    stopPolling();
+  function stopConnectionPolling() {
+    if (connectionTimer) { clearInterval(connectionTimer); connectionTimer = null; }
   }
 
-  function poll() {
+  function pollConnection() {
     fetch('status.php?session=' + encodeURIComponent(SESSION))
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => { if (data.status === 'ready') showReady(data.url); })
+      .then(data => {
+        if (data.mobile_connected) {
+          onPhoneConnected();
+        }
+      })
+      .catch(() => {});
+  }
+
+  function onPhoneConnected() {
+    stopConnectionPolling();
+    qrSide.hidden          = true;
+    connectBadgeRow.hidden = false;
+    openBtn.disabled       = false;
+    uploadHint.textContent = 'Phone is connected — click to request a photo';
+  }
+
+  // ── Photo polling (after requesting) ───────────────────────────────────
+  function startPhotoPolling(reqId) {
+    pollPhoto(reqId);
+    photoTimer = setInterval(() => pollPhoto(reqId), INTERVAL);
+  }
+
+  function stopPhotoPolling() {
+    if (photoTimer) { clearInterval(photoTimer); photoTimer = null; }
+  }
+
+  function pollPhoto(reqId) {
+    fetch('status.php?session=' + encodeURIComponent(SESSION) + '&request_id=' + reqId)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        if (data.status === 'ready') showReady(data.url);
+      })
       .catch(() => {
         dot.className          = 'dot error';
         statusText.textContent = 'Connection error — retrying…';
         setTimeout(() => {
           dot.className          = 'dot';
-          statusText.textContent = 'Waiting for photo…';
+          statusText.textContent = 'Waiting for phone to capture…';
         }, 3000);
       });
   }
 
+  function showReady(url) {
+    receivedUrl               = url;
+    dot.className             = 'dot ready';
+    statusText.textContent    = 'Photo received!';
+    imgEl.src                 = url;
+    imgEl.style.display       = 'block';
+    placeholder.style.display = 'none';
+    dlBtn.href                = url;
+    imgActions.hidden         = false;
+    stopPhotoPolling();
+  }
+
+  // ── Open modal — request a new photo ───────────────────────────────────
   openBtn.addEventListener('click', () => {
-    overlay.hidden = false;
+    // Reset modal state
+    receivedUrl               = null;
+    imgEl.src                 = '';
+    imgEl.style.display       = 'none';
+    placeholder.style.display = '';
+    imgActions.hidden         = true;
+    dot.className             = 'dot';
+    statusText.textContent    = 'Sending request to phone…';
+
+    overlay.hidden             = false;
     document.body.style.overflow = 'hidden';
-    if (!receivedUrl) startPolling();
+
+    // Ask server to create a new pending request
+    fetch('request-photo.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'session=' + encodeURIComponent(SESSION),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        if (data.ok) {
+          currentReqId           = data.request_id;
+          statusText.textContent = 'Waiting for phone to capture…';
+          startPhotoPolling(currentReqId);
+        }
+      })
+      .catch(() => {
+        statusText.textContent = 'Could not reach server. Please retry.';
+      });
   });
 
+  // ── Close modal ─────────────────────────────────────────────────────────
   function closeModal() {
     overlay.hidden = true;
     document.body.style.overflow = '';
-    stopPolling();
+    stopPhotoPolling();
   }
 
   closeBtn.addEventListener('click', closeModal);
   overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  // "Use This Photo" — attach thumbnail to form and close modal
+  // ── Use This Photo ──────────────────────────────────────────────────────
   usePhotoBtn.addEventListener('click', () => {
     thumbImg.src       = receivedUrl;
     thumbPreview.hidden = false;
-    openBtn.style.display = 'none';
     closeModal();
   });
 
-  // "Retake" — reopen the modal
+  // ── Retake ──────────────────────────────────────────────────────────────
   retakeBtn.addEventListener('click', () => {
     thumbPreview.hidden = true;
-    openBtn.style.display = '';
-    // Reset modal state
-    receivedUrl = null;
-    imgEl.src = '';
-    imgEl.style.display = 'none';
-    placeholder.style.display = '';
-    imgActions.hidden = true;
-    dot.className = 'dot';
-    statusText.textContent = 'Waiting for photo\u2026';
-    overlay.hidden = false;
-    document.body.style.overflow = 'hidden';
-    startPolling();
+    openBtn.click();   // triggers a fresh request
   });
 
-  // Basic form validation on submit
+  // ── Form submit ─────────────────────────────────────────────────────────
   document.getElementById('jewelry-form').addEventListener('submit', e => {
     e.preventDefault();
     const name     = document.getElementById('customer-name').value.trim();
@@ -296,6 +451,9 @@ $qrApiUrl  = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' . 
     }
     alert('Entry submitted successfully!');
   });
+
+  // Start connection polling immediately
+  startConnectionPolling();
 </script>
 
 </body>
